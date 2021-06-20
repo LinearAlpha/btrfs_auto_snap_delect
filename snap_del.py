@@ -7,7 +7,7 @@ import datetime
 import subprocess
 
 use = \
-'''
+    '''
 This program assume ths sanpshot pattern as
 @GMT-%Y.%m.%d_%H.%M.%S
 The \"@GMT\" can be anything
@@ -42,21 +42,19 @@ The \"@GMT\" can be anything
         Deafault = 1
 '''
 
-err_sDir= \
-'''
+err_sDir = \
+    '''
 The snapshot directory is not setted, please set snapshot directory
 by using \"-d\" or \"--snap_dir\" option
 '''
 
 
 err_term = \
-'''
+    '''
 Cannon reconize \"%s\", please check help to check right option
 The posivle options are \"days, week, months, years\"
 Please, check help by \"-h\" or \"--help\" flag'
 '''
-
-
 
 
 def usage():
@@ -64,7 +62,7 @@ def usage():
     print(use)
 
 
-def del_snap(d):
+def del_snap(d, dir):
     # Funsiton that format and send commned to the console
     old_dir = str()
     for id in d:
@@ -72,17 +70,18 @@ def del_snap(d):
         lsit_dic.sort()
         if len(lsit_dic) > 0:
             for v in lsit_dic[1:]:
-                old_dir = old_dir + ' ' + str(v[1])
+                old_dir = dir + str(v[1])
+                rtShell = subprocess.call(
+                    ['btrfs', 'subvolume', 'delete', '-v', old_dir]
+                    )
+                # If there is an error, print error message to the console
+                if rtShell != 0:
+                    print('Error! (Return code %s)' % (str(rtShell)))
+                    
         # error, I do not know this can happend
         else:
             print('I do not know how this happend')
-    rtShell = subprocess.call(
-        ['echo', 'btrfs', 'subvolume', 'delete', '-vc', old_dir]
-        )
-    # If there is an error, print error message to the console
-    if rtShell != 0:
-        print('Error! (Return code %s)' % (str(rtShell)))
-        sys.exit(2)
+    subprocess.call(['btrfs', 'filesystem', 'sync', dir])
 
 
 def main():
@@ -108,16 +107,17 @@ def main():
             usage()
             sys.exit()
         elif opt in ('-s', '--snap_dir'):
+            if arg[len(arg) - 1] != '/':
+                arg = arg + '/'
             snap_dir = arg
         elif opt in ('-d', 'term'):
             term = arg
         elif opt in ('-n', '--num_term'):
-            try: 
+            try:
                 numTerm = int(arg)
             except ValueError:
                 print('\nThe number of term need to be int')
                 sys.exit(2)
-
 
     # Check if snapshot directory is setted
     if snap_dir == str():
@@ -183,9 +183,9 @@ def main():
     if dictOld == dict():
         print('There is no snapshot older then %d %s' % (numTerm, term))
         sys.exit()
-    return dictOld
+    return dictOld, snap_dir
 
 
 if __name__ == "__main__":
-    toDelect = main()
-    del_snap(toDelect)
+    toDelect, snDir = main()
+    del_snap(toDelect, snDir)
