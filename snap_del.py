@@ -15,6 +15,14 @@ The \"@GMT\" can be anything
 -h, --help:
         Print usage/help
 
+-S, --Sync:
+        Run commend \'btrfs filesystem sync\' to force a sync on filessystem
+        after delect snapshots.
+        For this option, it need full path of mounting point
+        ex)
+        If the drive is mounted on /mnt/BTRFS
+        sn_del -S /mnt/BTRFS ...
+
 -s, --snap_dir <direcroty>:
         Directory of snapshot
         ex)
@@ -53,107 +61,137 @@ err_term = \
     '''
 Cannon reconize \"%s\", please check help to check right option
 The posivle options are \"days, week, months, years\"
-Please, check help by \"-h\" or \"--help\" flag'
+Please, check help by \"-h\" or \"--help\" flag
 '''
 
 
 def usage():
-    # Print usag of this program
+    '''
+    Print usage of this program
+    '''
     print(use)
 
 
-def del_snap(d, dir):
-    # Funsiton that format and send commned to the console
-    old_dir = str()
-    for id in d:
-        lsit_dic = d[id]
-        lsit_dic.sort()
-        if len(lsit_dic) > 0:
-            for v in lsit_dic[1:]:
-                old_dir = dir + str(v[1])
-                rtShell = subprocess.call(
-                    ['btrfs', 'subvolume', 'delete', '-v', old_dir]
-                    )
-                # If there is an error, print error message to the console
-                if rtShell != 0:
-                    print('Error! (Return code %s)' % (str(rtShell)))
-                    
-        # error, I do not know this can happend
-        else:
-            print('I do not know how this happend')
-    subprocess.call(['btrfs', 'filesystem', 'sync', dir])
+def checkUser():
+    '''
+    Check if sctip/progam is running as root user
+    '''
+    if not os.geteuid() == 0:
+        print('\n\tThis script/program must eun as root.\n')
+        sys.exit(2)
 
 
-def main():
-    # Read options, if option is unknown, print error message to console
+def readSysArg():
+    '''
+    Read system argument, and inisitlize the system options and argument
+    '''
+    # Sysparameter
+    snap_dir = str()
+    term = str()
+    numTerm = int()
+    sync_dir = str()
+    # Read system inpur arguement
     try:
-        opts, args = getopt.getopt(
+        opts, arg = getopt.getopt(
             sys.argv[1:],
-            "hs:d:n:",
-            ["help", "snap_dir", "del_term", "--num_term"]
+            "hs:d:n:S:",
+            ["help", "snap_dir", "del_term", "--num_term", "--Sync"]
         )
     except getopt.GetoptError as err:
         print('\n', err)
         print('To see usage, please use \"-h\" or \"--help\" flag')
         # The program exited with error
         sys.exit(2)
-
-    # Settting for each options
-    snap_dir = str()
-    term = str()
-    numTerm = int()
+    #Set system parameter
     for opt, arg in opts:
         if opt in ('-h', '--help'):
             usage()
             sys.exit()
         elif opt in ('-s', '--snap_dir'):
-            if arg[len(arg) - 1] != '/':
-                arg = arg + '/'
-            snap_dir = arg
+            if os.path.isdir(arg) and arg == None:
+                if arg[len(arg) - 1] != '/':
+                    arg = arg + '/'
+                snap_dir = arg
+            else:
+                print('\nNo such directory: \'%s\'' % arg)
+                sys.exit(2)
         elif opt in ('-d', 'term'):
             term = arg
         elif opt in ('-n', '--num_term'):
             try:
                 numTerm = int(arg)
+                if numTerm == 0:
+                    numTerm = 1
             except ValueError:
                 print('\nThe number of term need to be int')
                 sys.exit(2)
+        elif opt in ('-S', '--Sync'):
+            if (os.path.isdir(arg)):
+                sync_dir = arg
+            else:
+                print('\nNo such directory: \'%s\'' % arg)
+                sys.exit(2)
+    return snap_dir, term, numTerm, sync_dir
 
-    # Check if snapshot directory is setted
-    if snap_dir == str():
-        print(err_sDir)
-        # The program exited with error
-        sys.exit(2)
 
-    # Setting global variables
-    curTime = datetime.datetime.now()
-    if numTerm == 0:
-        numTerm = 1
+def setPeriod(term, num):
+    '''
+    Set period of time to keep snapshots
+    '''
     # Setting the period time to keep snapshots
     if term == str() or term == 'months':
         term = 'months'
-        snPeriod = datetime.timedelta(days=30 * numTerm)
+        snPeriod = datetime.timedelta(days=30 * num)
     elif term == 'days':
-        snPeriod = datetime.timedelta(days=numTerm)
+        snPeriod = datetime.timedelta(days=num)
     elif term == 'weeks':
-        snPeriod = datetime.timedelta(weeks=numTerm)
+        snPeriod = datetime.timedelta(weeks=num)
     elif term == 'years':
-        snPeriod = datetime.timedelta(days=365 * numTerm)
+        snPeriod = datetime.timedelta(days=365 * num)
     else:
         # error message
         print(err_term % (term))
         # The program exited with error
         sys.exit(2)
-    dictOld = dict()  # List thay holds order then snPeriod
+    return snPeriod
 
-    try:
-        ls_dir = os.listdir(snap_dir)
-    except:
-        print('\nNo such file or directory: \'%s\'' % snap_dir)
-        sys.exit(2)
 
+def del_snap(d, dir, mDir):
+    '''
+    Delect snapshots
+    '''
+    d.sort()
+    # Funsiton that format and send commned to the console
+    if len(d) > 0:
+        for dir in d:
+            rtShell = subprocess.call(
+                ['btrfs', 'subvolume', 'delete', '-v', dir]
+            )
+            # If there is an error, print error message to the console
+            if rtShell != 0:
+                print('Error! (Return code %s)' % (str(rtShell)))
+        # error, I do not know this can happend
+        else:
+            print('Teher is no list of directories')
+    if (mDir != str()):
+        subprocess.call(['btrfs', 'filesystem', 'sync', mDir])
+
+
+def main():
+    '''
+    Main function of this program
+    Initialize the lsit of directories that is order then user input.
+    The period is setted by serPeriod function.
+    '''
+    # Get system parameter
+    snap_dir, term, numTerm, sync_dir = readSysArg()
+    # Set snap delete period
+    snPeriod = setPeriod(term=term, num=numTerm)
+    # Setting global variables
+    curTime = datetime.datetime.now()
+    lsOlDir = list()
     # Read the list of snapshos from directory
-    for file in ls_dir:
+    for file in os.listdir(snap_dir):
         # check the program is runnin same directory as sanpshot
         if not os.path.isfile(file):
             data = file.split('-').pop(1).split('_').pop(0).split('.') + \
@@ -162,30 +200,17 @@ def main():
             timestamp = datetime.datetime(
                 data[0], data[1], data[2], data[3], data[4], data[5]
             )
-
         # If there is no marching ccase exit the program
-        old = curTime - timestamp
-        if old >= snPeriod:
-            if term == str() or term == 'months':
-                id = data[0:2]
-            elif term == 'days':
-                id = data[0:4]
-            elif term == 'weeks':
-                id = data[0:3]
-            elif term == 'years':
-                id = data[0:1]
-            else:
-                pass
-            if id not in dictOld:
-                dictOld[id] = list()
-            dictOld[id].append([timestamp, file])
+        if curTime - timestamp >= snPeriod:
+            lsOlDir.append(file)
     # Case for no snapshot that older then setting
-    if dictOld == dict():
+    if lsOlDir == list():
         print('There is no snapshot older then %d %s' % (numTerm, term))
         sys.exit()
-    return dictOld, snap_dir
+    return lsOlDir, snap_dir, sync_dir
 
 
 if __name__ == "__main__":
-    toDelect, snDir = main()
-    del_snap(toDelect, snDir)
+    checkUser()
+    toDelect, snDir, syDir = main()
+    del_snap(toDelect, snDir, syDir)
