@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # Build the binary.
 python -OO -m PyInstaller \
   --noconfirm \
