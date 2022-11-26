@@ -1,4 +1,7 @@
 # Build output
 /build
 .vscode
+.venv
 __pycache__
+old
+out
